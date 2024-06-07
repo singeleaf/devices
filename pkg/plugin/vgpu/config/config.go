@@ -17,9 +17,10 @@ limitations under the License.
 package config
 
 var (
-	DeviceSplitCount   uint
-	DeviceCoresScaling float64
-	NodeName           string
-	RuntimeSocketFlag  string
-	DisableCoreLimit   bool
+	DeviceSplitGpuCount uint
+	DeviceSplitCount    uint
+	DeviceCoresScaling  float64
+	NodeName            string
+	RuntimeSocketFlag   string
+	DisableCoreLimit    bool
 )

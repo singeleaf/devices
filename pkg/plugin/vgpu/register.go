@@ -85,7 +85,7 @@ func (r *DeviceRegister) RegistrInAnnotation() error {
 	encodeddevices := util.EncodeNodeDevices(*devices)
 	annos[util.NodeHandshake] = "Reported " + time.Now().String()
 	annos[util.NodeNvidiaDeviceRegistered] = encodeddevices
-	klog.Infoln("Reporting devices", encodeddevices, "in", time.Now().String())
+	//klog.Infoln("Reporting devices", encodeddevices, "in", time.Now().String())
 	err = util.PatchNodeAnnotations(node, annos)
 
 	if err != nil {

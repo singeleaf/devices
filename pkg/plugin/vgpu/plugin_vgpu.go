@@ -34,26 +34,8 @@ import (
 	"volcano.sh/k8s-device-plugin/pkg/plugin/vgpu/config"
 )
 
-// Constants to represent the various device list strategies
-const (
-	DeviceListStrategyEnvvar       = "envvar"
-	DeviceListStrategyVolumeMounts = "volume-mounts"
-)
-
-// Constants to represent the various device id strategies
-const (
-	DeviceIDStrategyUUID  = "uuid"
-	DeviceIDStrategyIndex = "index"
-)
-
-// Constants for use by the 'volume-mounts' device list strategy
-const (
-	deviceListAsVolumeMountsHostPath          = "/dev/null"
-	deviceListAsVolumeMountsContainerPathRoot = "/var/run/nvidia-container-devices"
-)
-
 // NvidiaDevicePlugin implements the Kubernetes device plugin API
-type NvidiaDevicePlugin struct {
+type NvidiaVGpuDevicePlugin struct {
 	ResourceManager
 	deviceCache      *DeviceCache
 	resourceName     string
@@ -69,9 +51,9 @@ type NvidiaDevicePlugin struct {
 	migStrategy   string
 }
 
-// NewNvidiaDevicePlugin returns an initialized NvidiaDevicePlugin
-func NewNvidiaDevicePlugin(resourceName string, deviceCache *DeviceCache, allocatePolicy gpuallocator.Policy, socket string) *NvidiaDevicePlugin {
-	return &NvidiaDevicePlugin{
+// NewNvidiaVGpuDevicePlugin returns an initialized NvidiaDevicePlugin
+func NewNvidiaVGpuDevicePlugin(resourceName string, deviceCache *DeviceCache, allocatePolicy gpuallocator.Policy, socket string) *NvidiaVGpuDevicePlugin {
+	return &NvidiaVGpuDevicePlugin{
 		deviceCache:    deviceCache,
 		resourceName:   resourceName,
 		allocatePolicy: allocatePolicy,
@@ -86,8 +68,8 @@ func NewNvidiaDevicePlugin(resourceName string, deviceCache *DeviceCache, alloca
 	}
 }
 
-// NewMIGNvidiaDevicePlugin returns an initialized NvidiaDevicePlugin
-func NewMIGNvidiaDevicePlugin(resourceName string, resourceManager ResourceManager, deviceListEnvvar string, allocatePolicy gpuallocator.Policy, socket string) *NvidiaDevicePlugin {
+// NewMIGNvidiaVGpuDevicePlugin returns an initialized NvidiaDevicePlugin
+func NewMIGNvidiaVGpuDevicePlugin(resourceName string, resourceManager ResourceManager, deviceListEnvvar string, allocatePolicy gpuallocator.Policy, socket string) *NvidiaDevicePlugin {
 	return &NvidiaDevicePlugin{
 		ResourceManager:  resourceManager,
 		resourceName:     resourceName,
@@ -105,7 +87,7 @@ func NewMIGNvidiaDevicePlugin(resourceName string, resourceManager ResourceManag
 	}
 }
 
-func (m *NvidiaDevicePlugin) initialize() {
+func (m *NvidiaVGpuDevicePlugin) initialize() {
 	var err error
 	if strings.Compare(m.migStrategy, "mixed") == 0 {
 		m.cachedDevices = m.ResourceManager.Devices()
@@ -116,7 +98,7 @@ func (m *NvidiaDevicePlugin) initialize() {
 	check(err)
 }
 
-func (m *NvidiaDevicePlugin) cleanup() {
+func (m *NvidiaVGpuDevicePlugin) cleanup() {
 	close(m.stop)
 	m.server = nil
 	m.health = nil
@@ -124,13 +106,13 @@ func (m *NvidiaDevicePlugin) cleanup() {
 }
 
 // Name returns the name of the plugin
-func (m *NvidiaDevicePlugin) Name() string {
-	return "Volcano-gpu-Plugin"
+func (m *NvidiaVGpuDevicePlugin) Name() string {
+	return "Volcano-vgpu-Plugin"
 }
 
 // Start starts the gRPC server, registers the device plugin with the Kubelet,
 // and starts the device healthchecks.
-func (m *NvidiaDevicePlugin) Start() error {
+func (m *NvidiaVGpuDevicePlugin) Start() error {
 	m.initialize()
 
 	err := m.Serve()
@@ -160,7 +142,7 @@ func (m *NvidiaDevicePlugin) Start() error {
 }
 
 // Stop stops the gRPC server.
-func (m *NvidiaDevicePlugin) Stop() error {
+func (m *NvidiaVGpuDevicePlugin) Stop() error {
 	if m == nil || m.server == nil {
 		return nil
 	}
@@ -174,12 +156,12 @@ func (m *NvidiaDevicePlugin) Stop() error {
 	return nil
 }
 
-func (m *NvidiaDevicePlugin) DevicesNum() int {
+func (m *NvidiaVGpuDevicePlugin) DevicesNum() int {
 	return len(m.apiDevices())
 }
 
 // Serve starts the gRPC server of the device plugin.
-func (m *NvidiaDevicePlugin) Serve() error {
+func (m *NvidiaVGpuDevicePlugin) Serve() error {
 	os.Remove(m.socket)
 	sock, err := net.Listen("unix", m.socket)
 	if err != nil {
@@ -229,7 +211,7 @@ func (m *NvidiaDevicePlugin) Serve() error {
 }
 
 // Register registers the device plugin for the given resourceName with Kubelet.
-func (m *NvidiaDevicePlugin) Register() error {
+func (m *NvidiaVGpuDevicePlugin) Register() error {
 	conn, err := m.dial(pluginapi.KubeletSocket, 5*time.Second)
 	if err != nil {
 		return err
@@ -252,13 +234,13 @@ func (m *NvidiaDevicePlugin) Register() error {
 }
 
 // GetDevicePluginOptions returns the values of the optional settings for this plugin
-func (m *NvidiaDevicePlugin) GetDevicePluginOptions(context.Context, *pluginapi.Empty) (*pluginapi.DevicePluginOptions, error) {
+func (m *NvidiaVGpuDevicePlugin) GetDevicePluginOptions(context.Context, *pluginapi.Empty) (*pluginapi.DevicePluginOptions, error) {
 	options := &pluginapi.DevicePluginOptions{}
 	return options, nil
 }
 
 // ListAndWatch lists devices and update that list according to the health status
-func (m *NvidiaDevicePlugin) ListAndWatch(e *pluginapi.Empty, s pluginapi.DevicePlugin_ListAndWatchServer) error {
+func (m *NvidiaVGpuDevicePlugin) ListAndWatch(e *pluginapi.Empty, s pluginapi.DevicePlugin_ListAndWatchServer) error {
 	_ = s.Send(&pluginapi.ListAndWatchResponse{Devices: m.apiDevices()})
 	for {
 		select {
@@ -273,7 +255,7 @@ func (m *NvidiaDevicePlugin) ListAndWatch(e *pluginapi.Empty, s pluginapi.Device
 	}
 }
 
-func (m *NvidiaDevicePlugin) MIGAllocate(ctx context.Context, reqs *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
+func (m *NvidiaVGpuDevicePlugin) MIGAllocate(ctx context.Context, reqs *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
 	responses := pluginapi.AllocateResponse{}
 	for _, req := range reqs.ContainerRequests {
 		for _, id := range req.DevicesIDs {
@@ -297,13 +279,18 @@ func (m *NvidiaDevicePlugin) MIGAllocate(ctx context.Context, reqs *pluginapi.Al
 }
 
 // Allocate which return list of devices.
-func (m *NvidiaDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
-	klog.Infoln("Allocate gpu", reqs.ContainerRequests)
+func (m *NvidiaVGpuDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
+	klog.Infoln("Allocate vgpu", reqs.ContainerRequests)
 	responses := pluginapi.AllocateResponse{}
 	for _, containerAllocateRequest := range reqs.ContainerRequests {
 		response := pluginapi.ContainerAllocateResponse{}
 		response.Envs = make(map[string]string)
-		response.Envs["NVIDIA_VISIBLE_DEVICES"] = strings.Join(containerAllocateRequest.DevicesIDs, ",")
+		var gpuDevicesIDs []string
+		for _, vgpuDevicesID := range containerAllocateRequest.DevicesIDs {
+			gpuDevicesID := vgpuDevicesID[0:strings.LastIndex(vgpuDevicesID, "-")]
+			gpuDevicesIDs = append(gpuDevicesIDs, gpuDevicesID)
+		}
+		response.Envs["NVIDIA_VISIBLE_DEVICES"] = strings.Join(gpuDevicesIDs, ",")
 		response.Envs["CUDA_DEVICE_MEMORY_SHARED_CACHE"] = fmt.Sprintf("/tmp/vgpu/%v.cache", uuid.NewUUID())
 
 		os.MkdirAll("/tmp/vgpulock", 0777)
@@ -332,12 +319,12 @@ func (m *NvidiaDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.Alloc
 }
 
 // PreStartContainer is unimplemented for this plugin
-func (m *NvidiaDevicePlugin) PreStartContainer(context.Context, *pluginapi.PreStartContainerRequest) (*pluginapi.PreStartContainerResponse, error) {
+func (m *NvidiaVGpuDevicePlugin) PreStartContainer(context.Context, *pluginapi.PreStartContainerRequest) (*pluginapi.PreStartContainerResponse, error) {
 	return &pluginapi.PreStartContainerResponse{}, nil
 }
 
 // dial establishes the gRPC communication with the registered device plugin.
-func (m *NvidiaDevicePlugin) dial(unixSocketPath string, timeout time.Duration) (*grpc.ClientConn, error) {
+func (m *NvidiaVGpuDevicePlugin) dial(unixSocketPath string, timeout time.Duration) (*grpc.ClientConn, error) {
 	c, err := grpc.Dial(unixSocketPath, grpc.WithInsecure(), grpc.WithBlock(),
 		grpc.WithTimeout(timeout),
 		grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
@@ -352,7 +339,7 @@ func (m *NvidiaDevicePlugin) dial(unixSocketPath string, timeout time.Duration) 
 	return c, nil
 }
 
-func (m *NvidiaDevicePlugin) Devices() []*Device {
+func (m *NvidiaVGpuDevicePlugin) Devices() []*Device {
 	if strings.Compare(m.migStrategy, "none") == 0 {
 		return m.deviceCache.GetCache()
 	}
@@ -363,7 +350,7 @@ func (m *NvidiaDevicePlugin) Devices() []*Device {
 	return []*Device{}
 }
 
-func (m *NvidiaDevicePlugin) deviceExists(id string) bool {
+func (m *NvidiaVGpuDevicePlugin) deviceExists(id string) bool {
 	for _, d := range m.cachedDevices {
 		if d.ID == id {
 			return true
@@ -372,11 +359,11 @@ func (m *NvidiaDevicePlugin) deviceExists(id string) bool {
 	return false
 }
 
-func (m *NvidiaDevicePlugin) deviceIDsFromUUIDs(uuids []string) []string {
+func (m *NvidiaVGpuDevicePlugin) deviceIDsFromUUIDs(uuids []string) []string {
 	return uuids
 }
 
-func (m *NvidiaDevicePlugin) apiDevices() []*pluginapi.Device {
+func (m *NvidiaVGpuDevicePlugin) apiDevices() []*pluginapi.Device {
 	if strings.Compare(m.migStrategy, "mixed") == 0 {
 		var pdevs []*pluginapi.Device
 		for _, d := range m.cachedDevices {
@@ -391,21 +378,32 @@ func (m *NvidiaDevicePlugin) apiDevices() []*pluginapi.Device {
 	gpuCount := len(devices) - int(config.DeviceSplitGpuCount)
 	klog.Infof("用于gpu整卡调度数量: %d", gpuCount)
 	klog.Infof("用于gpu共享调度数量: %d", config.DeviceSplitGpuCount)
+	klog.Infof("一张gpu卡切分为: %d张vgpu", config.DeviceSplitCount)
 
-	var res []*pluginapi.Device
-	for i := 0; i < gpuCount; i++ {
-		dev := devices[i]
-		res = append(res, &pluginapi.Device{
-			ID:       dev.ID,
-			Health:   dev.Health,
-			Topology: nil,
-		})
+	// 计算用于vgpu切分的gpu起始序号
+	vgpuStartIdx := gpuCount
+	if vgpuStartIdx < 0 {
+		vgpuStartIdx = 0
 	}
-	klog.Infof("用于gpu整卡调度向kubelet注册的数据: %v", res)
+	klog.Infof("用于gpu共享调度的gpu起始序号: %d", vgpuStartIdx)
+	var res []*pluginapi.Device
+	for i := vgpuStartIdx; i < len(devices); i++ {
+		dev := devices[i]
+		klog.Infof("开始切分序号为: %d的gpu卡，gpu uuid为: %s", i, dev.ID)
+		for j := uint(0); j < config.DeviceSplitCount; j++ {
+			id := fmt.Sprintf("%v-%v", dev.ID, j)
+			res = append(res, &pluginapi.Device{
+				ID:       id,
+				Health:   dev.Health,
+				Topology: nil,
+			})
+		}
+	}
+	klog.Infof("用于gpu共享调度向kubelet注册的数据: %v", res)
 	return res
 }
 
-func (m *NvidiaDevicePlugin) apiEnvs(envvar string, deviceIDs []string) map[string]string {
+func (m *NvidiaVGpuDevicePlugin) apiEnvs(envvar string, deviceIDs []string) map[string]string {
 	return map[string]string{
 		envvar: strings.Join(deviceIDs, ","),
 	}

@@ -83,7 +83,7 @@ spec:
       serviceAccount: volcano-device-plugin
       containers:
       - image: volcanosh/volcano-vgpu-device-plugin:dev-vgpu-1219
-        args: ["--device-split-count=10"]
+        args: ["--device-split-gpu-count=1", "--device-split-count=4"]
         lifecycle:
           postStart:
             exec:

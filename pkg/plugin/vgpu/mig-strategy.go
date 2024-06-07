@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/go-gpuallocator/gpuallocator"
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
+	"volcano.sh/k8s-device-plugin/pkg/plugin"
 	"volcano.sh/k8s-device-plugin/pkg/plugin/vgpu/util"
 )
 
@@ -38,7 +39,7 @@ type MigStrategyResourceSet map[string]struct{}
 
 // MigStrategy provides an interface for building the set of plugins required to implement a given MIG strategy
 type MigStrategy interface {
-	GetPlugins(cache *DeviceCache) []*NvidiaDevicePlugin
+	GetPlugins(cache *DeviceCache) []plugin.DevicePlugin
 	MatchesResource(mig *nvml.Device, resource string) bool
 }
 
@@ -60,14 +61,20 @@ type migStrategySingle struct{}
 type migStrategyMixed struct{}
 
 // migStrategyNone
-func (s *migStrategyNone) GetPlugins(cache *DeviceCache) []*NvidiaDevicePlugin {
-	return []*NvidiaDevicePlugin{
+func (s *migStrategyNone) GetPlugins(cache *DeviceCache) []plugin.DevicePlugin {
+	return []plugin.DevicePlugin{
 		NewNvidiaDevicePlugin(
 			//"nvidia.com/gpu",
-			util.ResourceName,
+			util.GpuResourceName,
 			cache,
 			gpuallocator.NewBestEffortPolicy(),
-			pluginapi.DevicePluginPath+"nvidia-gpu.sock"),
+			pluginapi.DevicePluginPath+"volcano.sh-nvidia-gpu.sock"),
+		NewNvidiaVGpuDevicePlugin(
+			//"nvidia.com/gpu",
+			util.VGpuResourceName,
+			cache,
+			gpuallocator.NewBestEffortPolicy(),
+			pluginapi.DevicePluginPath+"volcano.sh-nvidia-vgpu.sock"),
 	}
 }
 
@@ -76,7 +83,7 @@ func (s *migStrategyNone) MatchesResource(mig *nvml.Device, resource string) boo
 }
 
 // migStrategySingle
-func (s *migStrategySingle) GetPlugins(cache *DeviceCache) []*NvidiaDevicePlugin {
+func (s *migStrategySingle) GetPlugins(cache *DeviceCache) []plugin.DevicePlugin {
 	panic("single mode in MIG currently not supported")
 }
 
@@ -110,7 +117,7 @@ func (s *migStrategySingle) MatchesResource(mig *nvml.Device, resource string) b
 }
 
 // migStrategyMixed
-func (s *migStrategyMixed) GetPlugins(cache *DeviceCache) []*NvidiaDevicePlugin {
+func (s *migStrategyMixed) GetPlugins(cache *DeviceCache) []plugin.DevicePlugin {
 	devices := NewMIGCapableDevices()
 
 	if err := devices.AssertAllMigEnabledDevicesAreValid(); err != nil {
@@ -131,10 +138,10 @@ func (s *migStrategyMixed) GetPlugins(cache *DeviceCache) []*NvidiaDevicePlugin 
 		resources[r] = struct{}{}
 	}
 
-	plugins := []*NvidiaDevicePlugin{
+	plugins := []plugin.DevicePlugin{
 		NewNvidiaDevicePlugin(
 			//"nvidia.com/gpu",
-			util.ResourceName,
+			util.GpuResourceName,
 			cache,
 			gpuallocator.NewBestEffortPolicy(),
 			pluginapi.DevicePluginPath+"nvidia-gpu.sock"),

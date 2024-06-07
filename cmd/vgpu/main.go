@@ -24,7 +24,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"k8s.io/klog/v2"
+
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
+	"volcano.sh/k8s-device-plugin/pkg/plugin"
 	nvidiadevice "volcano.sh/k8s-device-plugin/pkg/plugin/vgpu"
 	"volcano.sh/k8s-device-plugin/pkg/plugin/vgpu/config"
 	"volcano.sh/k8s-device-plugin/pkg/plugin/vgpu/util"
@@ -63,7 +65,8 @@ func init() {
 
 	rootCmd.Flags().StringVar(&migStrategyFlag, "mig-strategy", "none", "the desired strategy for exposing MIG devices on GPUs that support it:\n\t\t[none | single | mixed]")
 	rootCmd.Flags().BoolVar(&failOnInitErrorFlag, "fail-on-init-error", true, "fail the plugin if an error is encountered during initialization, otherwise block indefinitely")
-	rootCmd.Flags().UintVar(&config.DeviceSplitCount, "device-split-count", 2, "the number for NVIDIA device split")
+	rootCmd.Flags().UintVar(&config.DeviceSplitGpuCount, "device-split-gpu-count", 1, "the number used for vgpu segmentation")
+	rootCmd.Flags().UintVar(&config.DeviceSplitCount, "device-split-count", 4, "the number for NVIDIA device split")
 	rootCmd.Flags().Float64Var(&config.DeviceCoresScaling, "device-cores-scaling", 1.0, "the ratio for NVIDIA device cores scaling")
 	rootCmd.Flags().StringVar(&config.NodeName, "node-name", viper.GetString("node-name"), "node name")
 
@@ -104,7 +107,7 @@ func start() error {
 	register.Start()
 	defer register.Stop()
 
-	var plugins []*nvidiadevice.NvidiaDevicePlugin
+	var plugins []plugin.DevicePlugin
 restart:
 	// If we are restarting, idempotently stop any running plugins before
 	// recreating them below.
@@ -122,7 +125,7 @@ restart:
 	pluginStartError := make(chan struct{})
 	for _, p := range plugins {
 		// Just continue if there are no devices to serve for plugin p.
-		if len(p.Devices()) == 0 {
+		if p.DevicesNum() == 0 {
 			continue
 		}
 

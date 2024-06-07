@@ -51,7 +51,8 @@ const (
 )
 
 var (
-	ResourceName          string
+	GpuResourceName       string
+	VGpuResourceName      string
 	ResourceMem           string
 	ResourceCores         string
 	ResourceMemPercentage string
